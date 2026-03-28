@@ -312,9 +312,13 @@ public class StoragePanel extends JPanel {
     ItemSortMode itemSortMode = plugin.getConfig().itemSortMode();
     Stream<ItemStack> newItemStream = storage.getItems().stream().map(ItemStack::new);
 
-    if (itemSortMode == ItemSortMode.VALUE) {
-      newItemStream = newItemStream.sorted(Comparator.comparingLong(ItemStack::getTotalGePrice)
-          .thenComparing(ItemStack::getTotalHaPrice).reversed());
+    if (itemSortMode != ItemSortMode.UNSORTED) {
+      /*Function<List<Comparator<ItemStack>>, List<Comparator<ItemStack>>> l = */
+      Comparator<ItemStack> valueComparator = ((itemSortMode == ItemSortMode.VALUE) ?
+          Comparator.comparingLong(ItemStack::getGePrice).thenComparing(ItemStack::getHaPrice):
+          Comparator.comparingLong(ItemStack::getHaPrice)
+      ).reversed();
+      newItemStream = newItemStream.sorted(valueComparator);
     }
 
     List<ItemStack> newItems = newItemStream.collect(Collectors.toList());

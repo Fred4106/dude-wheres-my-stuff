@@ -8,6 +8,7 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public enum ItemSortMode {
   VALUE("Value"),
+  HA_VALUE("High Alch Value"),
   UNSORTED("Unsorted");
 
   private final String name;

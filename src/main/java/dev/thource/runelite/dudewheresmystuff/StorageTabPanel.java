@@ -47,6 +47,7 @@ public abstract class StorageTabPanel<
     sortItemsDropdown = new JComboBox<>();
     sortItemsDropdown.setFont(FontManager.getRunescapeFont());
     sortItemsDropdown.setForeground(Color.WHITE);
+    sortItemsDropdown.addItem(ItemSortMode.HA_VALUE);
     sortItemsDropdown.addItem(ItemSortMode.VALUE);
     sortItemsDropdown.addItem(ItemSortMode.UNSORTED);
     sortItemsDropdown.setSelectedItem(plugin.getConfig().itemSortMode());
