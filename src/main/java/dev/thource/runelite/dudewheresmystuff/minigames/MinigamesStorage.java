@@ -7,7 +7,7 @@ import dev.thource.runelite.dudewheresmystuff.StoragePanel;
 import lombok.Getter;
 
 @Getter
-abstract class MinigamesStorage extends ItemStorage<MinigamesStorageType> {
+public abstract class MinigamesStorage extends ItemStorage<MinigamesStorageType> {
 
   protected MinigamesStorage(MinigamesStorageType type, DudeWheresMyStuffPlugin plugin) {
     super(type, plugin);

@@ -207,7 +207,8 @@ public class StorageManagerManager {
             getStashStorageManager().getStorages().stream(),
             getSailingStorageManager().getStorages().stream(),
             getPlayerOwnedHouseStorageManager().getStorages().stream(),
-            getWorldStorageManager().getStorages().stream())
+            getWorldStorageManager().getStorages().stream(),
+            getMinigamesStorageManager().getStorages().stream())
         .flatMap(i -> i);
   }
 
@@ -241,7 +242,10 @@ public class StorageManagerManager {
             getPlayerOwnedHouseStorageManager().getStorages().stream()
                 .filter(s -> s.includeInStoredItemCount(getPlayerOwnedHouseStorageManager().getConfigKey())),
             getWorldStorageManager().getStorages().stream()
-                .filter(s -> s.includeInStoredItemCount(getWorldStorageManager().getConfigKey())))
+                .filter(s -> s.includeInStoredItemCount(getWorldStorageManager().getConfigKey())),
+            getMinigamesStorageManager().getStorages().stream()
+                .filter(s -> s.includeInStoredItemCount(getMinigamesStorageManager().getConfigKey()))
+        )
         .flatMap(s -> s).filter(Storage::isWithdrawable);
   }
 
