@@ -46,8 +46,8 @@ public class ItemStack {
   @Setter private long quantity;
   @Setter private int spriteId = -1;
   @EqualsAndHashCode.Exclude @Setter private String name;
-  @EqualsAndHashCode.Exclude private int gePrice;
-  @EqualsAndHashCode.Exclude private int haPrice;
+  @EqualsAndHashCode.Exclude private long gePrice;
+  @EqualsAndHashCode.Exclude private long haPrice;
   @EqualsAndHashCode.Exclude @Setter private boolean stackable;
   @EqualsAndHashCode.Exclude private ItemIdentification itemIdentification;
   @EqualsAndHashCode.Exclude private int canonicalId;
@@ -112,7 +112,7 @@ public class ItemStack {
    * @param stackable if the item is stackable
    */
   public ItemStack(
-      int id, String name, long quantity, int gePrice, int haPrice, boolean stackable) {
+      int id, String name, long quantity, long gePrice, long haPrice, boolean stackable) {
     this.id = id;
     this.name = name;
     this.quantity = quantity;
