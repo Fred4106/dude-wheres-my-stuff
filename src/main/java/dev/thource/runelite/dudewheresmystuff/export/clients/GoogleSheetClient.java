@@ -1,22 +1,19 @@
 package dev.thource.runelite.dudewheresmystuff.export.clients;
 
-import com.google.api.services.sheets.v4.Sheets;
-import com.google.api.services.sheets.v4.model.AddSheetRequest;
-import com.google.api.services.sheets.v4.model.BatchUpdateSpreadsheetRequest;
-import com.google.api.services.sheets.v4.model.BatchUpdateSpreadsheetResponse;
-import com.google.api.services.sheets.v4.model.CellData;
-import com.google.api.services.sheets.v4.model.ClearValuesRequest;
-import com.google.api.services.sheets.v4.model.GridRange;
-import com.google.api.services.sheets.v4.model.Request;
-import com.google.api.services.sheets.v4.model.RowData;
-import com.google.api.services.sheets.v4.model.Sheet;
-import com.google.api.services.sheets.v4.model.SheetProperties;
-import com.google.api.services.sheets.v4.model.Spreadsheet;
-import com.google.api.services.sheets.v4.model.SpreadsheetProperties;
-import com.google.api.services.sheets.v4.model.UpdateCellsRequest;
-import com.google.api.services.sheets.v4.model.UpdateSheetPropertiesRequest;
+import com.google.gson.Gson;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
+import dev.thource.runelite.dudewheresmystuff.export.model.CellData;
+import dev.thource.runelite.dudewheresmystuff.export.model.GridRange;
+import dev.thource.runelite.dudewheresmystuff.export.model.RowData;
+import dev.thource.runelite.dudewheresmystuff.export.model.Sheet;
+import dev.thource.runelite.dudewheresmystuff.export.model.SheetProperties;
+import dev.thource.runelite.dudewheresmystuff.export.model.Spreadsheet;
+import dev.thource.runelite.dudewheresmystuff.export.model.SpreadsheetProperties;
 import dev.thource.runelite.dudewheresmystuff.export.utils.GoogleSheetConnectionUtils;
-import java.util.ArrayList;
+import dev.thource.runelite.dudewheresmystuff.export.utils.GoogleSheetConnectionUtils.SheetsClient;
+import dev.thource.runelite.dudewheresmystuff.export.utils.GoogleSheetsAuthException;
+import java.io.IOException;
 import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
@@ -24,31 +21,39 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public class GoogleSheetClient {
-  private final Sheets sheetsService;
+  private final SheetsClient sheetsClient;
+  private final Gson gson;
 
-  public GoogleSheetClient(String email) {
-    this.sheetsService = GoogleSheetConnectionUtils.getSheetsConnection(email);
+  public GoogleSheetClient(Gson gson) {
+    this.sheetsClient = GoogleSheetConnectionUtils.getSheetsConnection();
+    this.gson = gson;
   }
 
-  public BatchUpdateSpreadsheetResponse writeCellData(
+  public JsonObject writeCellData(
       String spreadsheetId, GridRange gridRange, List<List<CellData>> cellData) {
     try {
       List<RowData> rowData =
           cellData.stream().map(x -> new RowData().setValues(x)).collect(Collectors.toList());
-      return sheetsService
-          .spreadsheets()
-          .batchUpdate(
-              spreadsheetId,
-              new BatchUpdateSpreadsheetRequest()
-                  .setRequests(
-                      List.of(
-                          new Request()
-                              .setUpdateCells(
-                                  new UpdateCellsRequest()
-                                      .setFields("*")
-                                      .setRange(gridRange)
-                                      .setRows(new ArrayList<>(rowData))))))
-          .execute();
+
+      JsonObject updateCellsRequest = new JsonObject();
+      updateCellsRequest.addProperty("fields", "*");
+      updateCellsRequest.add("range", gson.toJsonTree(gridRange));
+      JsonArray rows = new JsonArray();
+      rowData.forEach(row -> rows.add(gson.toJsonTree(row)));
+      updateCellsRequest.add("rows", rows);
+
+      JsonObject request = new JsonObject();
+      request.add("updateCells", updateCellsRequest);
+
+      JsonArray requests = new JsonArray();
+      requests.add(request);
+
+      JsonObject body = new JsonObject();
+      body.add("requests", requests);
+
+      return sheetsClient.batchUpdate(spreadsheetId, body);
+    } catch (GoogleSheetsAuthException e) {
+      throw e;
     } catch (Exception e) {
       log.error("Encountered issue with batch write: ", e);
       throw new RuntimeException(e);
@@ -57,9 +62,10 @@ public class GoogleSheetClient {
 
   public List<Sheet> getSheetList(String spreadsheetId) {
     try {
-      Spreadsheet spreadsheet = sheetsService.spreadsheets().get(spreadsheetId).execute();
+      Spreadsheet spreadsheet = fetchSpreadsheet(spreadsheetId);
       return spreadsheet.getSheets();
-
+    } catch (GoogleSheetsAuthException e) {
+      throw e;
     } catch (Exception e) {
       log.error(
           String.format("Encountered error in getSheetList, spreadsheetId: %s", spreadsheetId), e);
@@ -77,7 +83,8 @@ public class GoogleSheetClient {
               RuntimeException e =
                   new RuntimeException(
                       String.format(
-                          "Failed to retrieve sheet that should have been created for spreadsheetId: %s",
+                          "Failed to retrieve sheet that should have been created for"
+                              + " spreadsheetId: %s",
                           spreadsheetId));
               log.error("Unexpected Exception While Writing Headers", e);
               return e;
@@ -87,13 +94,15 @@ public class GoogleSheetClient {
   public Spreadsheet createOrGetSpreadsheet(String spreadsheetId, String displayName) {
     try {
       if (Objects.equals(spreadsheetId, "")) {
-        return sheetsService
-            .spreadsheets()
-            .create(
-                new Spreadsheet().setProperties(new SpreadsheetProperties().setTitle(displayName)))
-            .execute();
+        Spreadsheet newSpreadsheet =
+            new Spreadsheet().setProperties(new SpreadsheetProperties().setTitle(displayName));
+        JsonObject response =
+            sheetsClient.createSpreadsheet(gson.toJsonTree(newSpreadsheet).getAsJsonObject());
+        return gson.fromJson(response, Spreadsheet.class);
       }
-      return sheetsService.spreadsheets().get(spreadsheetId).execute();
+      return fetchSpreadsheet(spreadsheetId);
+    } catch (GoogleSheetsAuthException e) {
+      throw e;
     } catch (Exception e) {
       throw new RuntimeException(e);
     }
@@ -102,19 +111,24 @@ public class GoogleSheetClient {
   public boolean maybeCreateSheet(String spreadsheetId, String sheetTitle) {
     if (!getSheetExists(spreadsheetId, sheetTitle)) {
       try {
-        sheetsService
-            .spreadsheets()
-            .batchUpdate(
-                spreadsheetId,
-                new BatchUpdateSpreadsheetRequest()
-                    .setRequests(
-                        List.of(
-                            new Request()
-                                .setAddSheet(
-                                    new AddSheetRequest()
-                                        .setProperties(
-                                            new SheetProperties().setTitle(sheetTitle))))))
-            .execute();
+        JsonObject properties = new JsonObject();
+        properties.addProperty("title", sheetTitle);
+
+        JsonObject addSheetRequest = new JsonObject();
+        addSheetRequest.add("properties", properties);
+
+        JsonObject request = new JsonObject();
+        request.add("addSheet", addSheetRequest);
+
+        JsonArray requests = new JsonArray();
+        requests.add(request);
+
+        JsonObject body = new JsonObject();
+        body.add("requests", requests);
+
+        sheetsClient.batchUpdate(spreadsheetId, body);
+      } catch (GoogleSheetsAuthException e) {
+        throw e;
       } catch (Exception e) {
         throw new RuntimeException(e);
       }
@@ -125,10 +139,11 @@ public class GoogleSheetClient {
 
   public boolean maybeClearSheet(String spreadsheetId, String sheetTitle) {
     if (getSheetExists(spreadsheetId, sheetTitle)) {
-      ClearValuesRequest request = new ClearValuesRequest();
       try {
-        sheetsService.spreadsheets().values().clear(spreadsheetId, sheetTitle, request).execute();
+        sheetsClient.clearValues(spreadsheetId, sheetTitle);
         return true;
+      } catch (GoogleSheetsAuthException e) {
+        throw e;
       } catch (Exception e) {
         throw new RuntimeException(e);
       }
@@ -138,10 +153,12 @@ public class GoogleSheetClient {
 
   public boolean getSheetExists(String spreadsheetId, String sheetTitle) {
     try {
-      Spreadsheet spreadsheet = sheetsService.spreadsheets().get(spreadsheetId).execute();
+      Spreadsheet spreadsheet = fetchSpreadsheet(spreadsheetId);
       List<Sheet> sheets = spreadsheet.getSheets();
       return sheets.stream()
           .anyMatch(x -> x.getProperties().getTitle().equalsIgnoreCase(sheetTitle));
+    } catch (GoogleSheetsAuthException e) {
+      throw e;
     } catch (Exception e) {
       throw new RuntimeException(e);
     }
@@ -149,21 +166,29 @@ public class GoogleSheetClient {
 
   public void updateSheetProperties(String spreadsheetId, SheetProperties sheetProperties) {
     try {
-      sheetsService
-          .spreadsheets()
-          .batchUpdate(
-              spreadsheetId,
-              new BatchUpdateSpreadsheetRequest()
-                  .setRequests(
-                      List.of(
-                          new Request()
-                              .setUpdateSheetProperties(
-                                  new UpdateSheetPropertiesRequest()
-                                      .setFields("*")
-                                      .setProperties(sheetProperties)))))
-          .execute();
+      JsonObject updateSheetPropertiesRequest = new JsonObject();
+      updateSheetPropertiesRequest.addProperty("fields", "*");
+      updateSheetPropertiesRequest.add("properties", gson.toJsonTree(sheetProperties));
+
+      JsonObject request = new JsonObject();
+      request.add("updateSheetProperties", updateSheetPropertiesRequest);
+
+      JsonArray requests = new JsonArray();
+      requests.add(request);
+
+      JsonObject body = new JsonObject();
+      body.add("requests", requests);
+
+      sheetsClient.batchUpdate(spreadsheetId, body);
+    } catch (GoogleSheetsAuthException e) {
+      throw e;
     } catch (Exception e) {
       throw new RuntimeException(e);
     }
+  }
+
+  private Spreadsheet fetchSpreadsheet(String spreadsheetId) throws IOException {
+    JsonObject response = sheetsClient.getSpreadsheet(spreadsheetId);
+    return gson.fromJson(response, Spreadsheet.class);
   }
 }

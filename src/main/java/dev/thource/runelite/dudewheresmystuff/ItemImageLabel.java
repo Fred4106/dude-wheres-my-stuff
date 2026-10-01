@@ -7,7 +7,6 @@ import java.awt.Point;
 import javax.annotation.Nonnull;
 import javax.swing.JLabel;
 import lombok.Setter;
-import net.runelite.client.plugins.itemidentification.ItemIdentificationMode;
 import net.runelite.client.ui.FontManager;
 import net.runelite.client.ui.overlay.components.TextComponent;
 
@@ -33,12 +32,13 @@ class ItemImageLabel extends JLabel {
     }
 
     if (itemStack.getItemIdentification() == null
-        || !plugin.getPluginManager().isPluginEnabled(plugin.getItemIdentificationPlugin())
+        || !Boolean.parseBoolean(
+            plugin.getConfigManager().getConfiguration("runelite", "itemidentificationplugin"))
         || !itemStack
-        .getItemIdentification()
-        .type
-        .enabled
-        .test(plugin.getItemIdentificationConfig())) {
+            .getItemIdentification()
+            .getType()
+            .enabled
+            .test(plugin.getItemIdentificationConfig())) {
       return;
     }
 
@@ -49,9 +49,9 @@ class ItemImageLabel extends JLabel {
     ItemIdentificationMode itemIdentificationMode =
         plugin.getItemIdentificationConfig().identificationType();
     if (itemIdentificationMode == ItemIdentificationMode.SHORT) {
-      textComponent.setText(itemStack.getItemIdentification().shortName);
+      textComponent.setText(itemStack.getItemIdentification().getShortName());
     } else if (itemIdentificationMode == ItemIdentificationMode.MEDIUM) {
-      textComponent.setText(itemStack.getItemIdentification().medName);
+      textComponent.setText(itemStack.getItemIdentification().getMedName());
     }
     textComponent.render((Graphics2D) g);
   }

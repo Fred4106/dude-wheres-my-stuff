@@ -26,8 +26,8 @@
 
 package dev.thource.runelite.dudewheresmystuff;
 
-import com.google.api.services.sheets.v4.model.CellData;
-import com.google.api.services.sheets.v4.model.ExtendedValue;
+import dev.thource.runelite.dudewheresmystuff.export.model.CellData;
+import dev.thource.runelite.dudewheresmystuff.export.model.ExtendedValue;
 import java.util.List;
 import javax.annotation.Nullable;
 import lombok.EqualsAndHashCode;
@@ -47,7 +47,7 @@ public class ItemStack {
   @Setter private int spriteId = -1;
   @EqualsAndHashCode.Exclude @Setter private String name;
   @EqualsAndHashCode.Exclude private long gePrice;
-  @EqualsAndHashCode.Exclude private long haPrice;
+  @EqualsAndHashCode.Exclude private int haPrice;
   @EqualsAndHashCode.Exclude @Setter private boolean stackable;
   @EqualsAndHashCode.Exclude private ItemIdentification itemIdentification;
   @EqualsAndHashCode.Exclude private int canonicalId;
@@ -55,7 +55,7 @@ public class ItemStack {
   /**
    * A constructor.
    *
-   * @param id     OSRS item ID
+   * @param id OSRS item ID
    * @param plugin plugin
    */
   public ItemStack(int id, DudeWheresMyStuffPlugin plugin) {
@@ -69,9 +69,9 @@ public class ItemStack {
   /**
    * A constructor.
    *
-   * @param id OSRS  item ID
+   * @param id OSRS item ID
    * @param quantity quantity
-   * @param plugin   plugin
+   * @param plugin plugin
    */
   public ItemStack(int id, long quantity, DudeWheresMyStuffPlugin plugin) {
     this(id, plugin);
@@ -104,15 +104,15 @@ public class ItemStack {
    * <p>WARNING: ItemStacks created using this constructor will not have an ItemIdentification
    * attached.
    *
-   * @param id        the item's id
-   * @param name      the item's name
-   * @param quantity  the quantity of the item
-   * @param gePrice   the GE price
-   * @param haPrice   the high alchemy price
+   * @param id the item's id
+   * @param name the item's name
+   * @param quantity the quantity of the item
+   * @param gePrice the GE price
+   * @param haPrice the high alchemy price
    * @param stackable if the item is stackable
    */
   public ItemStack(
-      int id, String name, long quantity, long gePrice, long haPrice, boolean stackable) {
+      int id, String name, long quantity, long gePrice, int haPrice, boolean stackable) {
     this.id = id;
     this.name = name;
     this.quantity = quantity;
@@ -131,6 +131,8 @@ public class ItemStack {
     if (plugin.getClient().getGameState().getState() < GameState.LOGIN_SCREEN.getState()) {
       return false;
     }
+
+    ItemIdentification.load(plugin.getGson());
 
     ItemManager itemManager = plugin.getItemManager();
     ItemComposition composition = itemManager.getItemComposition(id);

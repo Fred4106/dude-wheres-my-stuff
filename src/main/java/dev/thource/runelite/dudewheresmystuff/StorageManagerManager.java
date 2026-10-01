@@ -1,6 +1,5 @@
 package dev.thource.runelite.dudewheresmystuff;
 
-import com.google.api.client.auth.oauth2.TokenResponseException;
 import dev.thource.runelite.dudewheresmystuff.carryable.CarryableStorageManager;
 import dev.thource.runelite.dudewheresmystuff.coins.CoinsStorageManager;
 import dev.thource.runelite.dudewheresmystuff.coins.CoinsStorageType;
@@ -13,6 +12,7 @@ import dev.thource.runelite.dudewheresmystuff.export.DataExportWriter;
 import dev.thource.runelite.dudewheresmystuff.export.DataExporter;
 import dev.thource.runelite.dudewheresmystuff.export.exporters.StorageManagerExporter;
 import dev.thource.runelite.dudewheresmystuff.export.utils.GoogleSheetConnectionUtils;
+import dev.thource.runelite.dudewheresmystuff.export.utils.GoogleSheetsAuthException;
 import dev.thource.runelite.dudewheresmystuff.export.writers.CsvWriter;
 import dev.thource.runelite.dudewheresmystuff.export.writers.GoogleSheetsWriter;
 import dev.thource.runelite.dudewheresmystuff.minigames.MinigamesStorageManager;
@@ -120,26 +120,36 @@ public class StorageManagerManager {
     for (StorageManager<?, ?> storageManager : storageManagers) {
       storageManager.load(profileKey);
 
-      // Bounce into swing and back into the client thread to give StoragePanels a chance to be created
+      // Bounce into swing and back into the client thread to give StoragePanels a chance to be
+      // created
       SwingUtilities.invokeLater(
           () ->
-              plugin.getClientThread().invoke(() -> {
-                storageManager.getStorages().forEach(storage -> {
-                  if (storage.getStoragePanel() != null) {
-                    storage.getStoragePanel().refreshItems();
-                  }
-                });
+              plugin
+                  .getClientThread()
+                  .invoke(
+                      () -> {
+                        storageManager
+                            .getStorages()
+                            .forEach(
+                                storage -> {
+                                  if (storage.getStoragePanel() != null) {
+                                    storage.getStoragePanel().refreshItems();
+                                  }
+                                });
 
-                SwingUtilities.invokeLater(
-                    () -> {
-                      storageManager.getStorages().forEach(storage -> {
-                        if (storage.getStoragePanel() != null) {
-                          storage.getStoragePanel().update();
-                        }
-                      });
-                      storageManager.getStorageTabPanel().reorderStoragePanels();
-                    });
-              }));
+                        SwingUtilities.invokeLater(
+                            () -> {
+                              storageManager
+                                  .getStorages()
+                                  .forEach(
+                                      storage -> {
+                                        if (storage.getStoragePanel() != null) {
+                                          storage.getStoragePanel().update();
+                                        }
+                                      });
+                              storageManager.getStorageTabPanel().reorderStoragePanels();
+                            });
+                      }));
     }
   }
 
@@ -240,22 +250,29 @@ public class StorageManagerManager {
                             && storage.getType() != CoinsStorageType.BANK)
                 .filter(s -> s.includeInStoredItemCount(getCoinsStorageManager().getConfigKey())),
             getCarryableStorageManager().getStorages().stream()
-                .filter(s -> s.includeInStoredItemCount(getCarryableStorageManager().getConfigKey())),
+                .filter(
+                    s -> s.includeInStoredItemCount(getCarryableStorageManager().getConfigKey())),
             getStashStorageManager().getStorages().stream()
                 .filter(s -> s.includeInStoredItemCount(getStashStorageManager().getConfigKey())),
             getPlayerOwnedHouseStorageManager().getStorages().stream()
-                .filter(s -> s.includeInStoredItemCount(getPlayerOwnedHouseStorageManager().getConfigKey())),
+                .filter(
+                    s ->
+                        s.includeInStoredItemCount(
+                            getPlayerOwnedHouseStorageManager().getConfigKey())),
             getWorldStorageManager().getStorages().stream()
                 .filter(s -> s.includeInStoredItemCount(getWorldStorageManager().getConfigKey())),
             getMinigamesStorageManager().getStorages().stream()
                 .filter(s -> s.includeInStoredItemCount(getMinigamesStorageManager().getConfigKey()))
         )
-        .flatMap(s -> s).filter(Storage::isWithdrawable);
+        .flatMap(s -> s)
+        .filter(Storage::isWithdrawable);
   }
 
-
   public List<ItemStack> getItems() {
-    return getStorages().filter(Storage::isEnabled).map(Storage::getItems).flatMap(List::stream)
+    return getStorages()
+        .filter(Storage::isEnabled)
+        .map(Storage::getItems)
+        .flatMap(List::stream)
         .collect(Collectors.toList());
   }
 
@@ -296,7 +313,8 @@ public class StorageManagerManager {
   }
 
   /** The non-empty, canonicalized {@code {id, quantity}} entries of a single storage. */
-  private List<Map<String, Object>> pluginMessageItems(Storage<?> storage, ItemManager itemManager) {
+  private List<Map<String, Object>> pluginMessageItems(
+      Storage<?> storage, ItemManager itemManager) {
     List<Map<String, Object>> items = new ArrayList<>();
     for (ItemStack itemStack : storage.getItems()) {
       if (itemStack.getId() <= 0 || itemStack.getQuantity() <= 0) {
@@ -323,30 +341,44 @@ public class StorageManagerManager {
             () -> {
               DataExportWriter writer;
 
-              if ((destination == DataDestination.CSV)) {
-                writer = new CsvWriter(displayName);
-              } else if ((destination == DataDestination.GOOGLE_SHEETS)) {
-                writer = new GoogleSheetsWriter(plugin, displayName);
-              } else {
-                throw new RuntimeException(
-                    "Could not find a writer that likes the destination selected");
-              }
-
-              DataExporter exporter = new StorageManagerExporter(writer, s);
               try {
+                if ((destination == DataDestination.CSV)) {
+                  writer = new CsvWriter(displayName, plugin.getPluginDir());
+                } else if ((destination == DataDestination.GOOGLE_SHEETS)) {
+                  writer = new GoogleSheetsWriter(plugin, displayName);
+                } else {
+                  throw new RuntimeException(
+                      "Could not find a writer that likes the destination selected");
+                }
+
+                DataExporter exporter = new StorageManagerExporter(writer, s);
+
                 export(exporter, writer);
               } catch (IOException | IllegalArgumentException e) {
-                log.error("Unable to export: " + e.getMessage());
+                log.error("Unable to export: " + e.getMessage(), e);
                 plugin.getNotifier().notify("Item export failed.", MessageType.ERROR);
-              } catch (Exception ex) {
-                if (ex instanceof TokenResponseException) {
+              } catch (GoogleSheetsAuthException authEx) {
+                log.warn(
+                    "Google rejected our credentials, clearing them and retrying once", authEx);
+                try {
                   GoogleSheetConnectionUtils.invalidateCredentials();
-                  try {
-                    export(exporter, writer);
-                  } catch (IOException e) {
-                    throw new RuntimeException(e);
-                  }
+                } catch (IOException e) {
+                  log.error("Unable to invalidate credentials: " + e.getMessage(), e);
+                  plugin.getNotifier().notify("Item export failed.", MessageType.ERROR);
                 }
+                // The old writer/exporter hold a GoogleSheetClient built with the now-rejected
+                // access token, so the retry needs a brand new one rather than reusing them.
+                try {
+                  DataExportWriter retryWriter = new GoogleSheetsWriter(plugin, displayName);
+                  DataExporter retryExporter = new StorageManagerExporter(retryWriter, s);
+                  export(retryExporter, retryWriter);
+                } catch (IOException | IllegalArgumentException e) {
+                  log.error("Unable to export after re-authenticating: " + e.getMessage(), e);
+                  plugin.getNotifier().notify("Item export failed.", MessageType.ERROR);
+                }
+              } catch (Exception ex) {
+                log.error("Unable to export: " + ex.getMessage(), ex);
+                plugin.getNotifier().notify("Item export failed.", MessageType.ERROR);
               }
             });
     t.start();
